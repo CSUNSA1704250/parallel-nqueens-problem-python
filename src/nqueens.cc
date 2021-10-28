@@ -10,6 +10,7 @@
 #include <iostream>
 #include <mutex>
 #include <queue>
+#include <set>
 #include <thread>
 #include <vector>
 using namespace std;
@@ -67,6 +68,10 @@ class ThreadPool {
     mEventVar.notify_one();
     return wrapper->get_future();
   }
+  size_t size() {
+    unique_lock<mutex> lock{mEventMutex};
+    return mTasks.size();
+  }
 
  private:
   vector<thread> mThreads;
@@ -118,18 +123,16 @@ class ThreadPool {
 // static bool found;
 ThreadPool pool{thread::hardware_concurrency()};
 atomic<bool> found(false);
-int cc = 0;
-
-auto stream = stdout;
 
 struct NQueens {
   int n;  // OPtimizable
   // NQueensState state;
   int ans = 0;
   // int row = 0, col = 0;
-  bitset<48> pDiag, nDiag, column;
+  bitset<64> pDiag, nDiag, column;
   array<int, 48> board{0};
-  array<int, 48> tracker{0};
+  array<unsigned long, 48> tracker{0};
+  bool child = false;
   // mutex mtx;
   NQueens(int n) : n(n) {}
 
@@ -166,12 +169,17 @@ struct NQueens {
       return true;
     }
 
-    if (r == n) {
+    if (r == n && checker()) {
       // state;
       ans += 1;
       found = true;
-      costly_print();
+      // costly_print();
+      // fmt::print("{}\n",board);
+      costly_state();
+      // fmt::print("~~check col {} {} {}\n", board[20], column[board[20]],
+      // column[20]);
       genDot();
+
       // fmt::print("{}\n",
       // vector<int>(tracker.begin(), tracker.begin() + n));
       return true;
@@ -188,41 +196,20 @@ struct NQueens {
     //})
     //.get());
     //}
-    // auto c = 0u;
-    // row = r;
-
-    // if (tracker[r] > 1000000 && col + 2 < n) {
-    // fmt::print("spawn [{}][{}]\n", r, col);
-    // pool.enqueue([&, c = col + 2, r] {
-    // cout << "var c " << c << "\n";
-    // NQueens q(n);
-    //// auto c = col + 1;
-    // q.board = board;
-    // q.column = column;
-    // q.nDiag = nDiag;
-    // q.pDiag = pDiag;
-    // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] = 1;
-    // q.board[r] = c;
-    // q.first(r + 1);
-    //});
-    // fmt::print("tracker [{}][{}] {}\n", r, c, tracker[r]);
-    //}
 
     for (auto c = 0u; c < n; c++) {
-      // col = c;
       // for (auto c = offset + (0u - offset) * bool(r); c < n; c++) {
+      // col = c;
       if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c] && !ans) {
         // if (r == 18) {
         // fmt::print("spawn [{}][{}] cc {}\n", r, c, ++cc);
         // fmt::print("spawn {}\n",
         // vector<int>(board.begin(), board.begin() + n));
         //}
-        // if (tracker[r] > 1000000 && c + 2 < n) {
-        // fmt::print("spawn [{}][{}]\n", r, c);
-        // cout << column << "\n";
-        // fmt::print("{}\n", column);
-        // pool.enqueue([&, c = c + 1, r] {
-        // cout << "var r " << r << "var c " << c << "\n";
+        // bool tf = false;
+        // if (tracker[r] > 1000000) {
+        // if (r > n / 2 && tracker[r] >1000000) {
+        // tf = pool.enqueue([&, c, r] {
         // NQueens q(n);
         // q.board = board;
         // q.column = column;
@@ -230,16 +217,37 @@ struct NQueens {
         // q.pDiag = pDiag;
         // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] = 1;
         // q.board[r] = c;
-        // q.first(r + 1);
-        //});
-        // fmt::print("tracker [{}][{}] {}\n", r, c, tracker[r]);
+        // return q.first(r + 1);
+        //})
+        //.get();
+        //} else {
+        // column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
+        // board[r] = c;
         //}
         column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
         board[r] = c;
-        if (first(r + 1)) {
-          // cout << "sol in " << r << "\n";
-          // fmt::print("sol r {}, c {}\n", r, c);
-          return true;
+
+        // if () {
+        // if (!child && r > n / 2 + n / 4 && pool.size() < 100) {
+        if (!child && tracker[r] > 10000000 && pool.size() < 100) {
+          pool.enqueue([&, c, r] {
+            NQueens q(n);
+            q.board = board;
+            q.column = column;
+            q.nDiag = nDiag;
+            q.pDiag = pDiag;
+            q.child = true;
+            q.tracker = tracker;
+            // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] =
+            // 1; q.board[r] = c;
+            q.first(r + 1);
+          });
+        } else if (child || tracker[r] < 1000000) {
+          if (first(r + 1)) {
+            // cout << "sol in " << r << "\n";
+            // fmt::print("sol r {}, c {}\n", r, c);
+            return true;
+          }
         }
         // backtrack
         tracker[r]++;
@@ -261,6 +269,7 @@ struct NQueens {
   void costly_state() {
     // unique_lock<mutex> lk(mtx);
     fmt::print("{}\n", vector<int>(board.begin(), board.begin() + n));
+    fmt::print("checker: {}\n", checker());
     // for (auto i = 0u; i < n - 1; i++) {
     // cout << board[i] + 1 << ' ';
     //}
@@ -296,7 +305,6 @@ struct NQueens {
         dotFile[i][board[i]] = "</td><td>&#9813; ";
       else
         dotFile[i][board[i]] = "<tr><td>&#9813; ";
-      //}
     }
     w.write(
         "digraph D {\nnode [shape=plaintext]\nsome_node [\nlabel=<\n<table "
@@ -307,6 +315,33 @@ struct NQueens {
       }
     }
     w.write("</table>>\n];\n}\n");
+  }
+  bool checker() {
+    vector<vector<int>> v(n);
+    std::fill(v.begin(), v.end(), vector<int>(n));
+    for (auto i = 0u; i < n; i++) {
+      std::fill(v[i].begin(), v[i].end(), 0);
+    }
+    for (auto i = 0u; i < n; i++) {
+      v[i][board[i]] = 1;
+      // fmt::print("{}\n", v[i]);
+    }
+    // auto rows = <int>();
+    set<int> _pDiag, _nDiag, _column, _rows;
+    // set<int> _pDiag, _nDiag, _column, _rows;
+    for (auto i = 0u; i < n; i++) {
+      for (auto j = 0u; j < n; j++) {
+        if (v[i][j]) {
+          _rows.insert(i);
+          _column.insert(j);
+          _nDiag.insert(i - j);
+          _pDiag.insert(i + j);
+        }
+      }
+    }
+    // fmt::print("{} {} {} {}\n",_);
+    return _rows.size() == _column.size() && _nDiag.size() == _pDiag.size() &&
+           _pDiag.size() == n;
   }
 };
 
@@ -348,7 +383,7 @@ void solve_all_n_threads(int n) {
   w.write("#Solutions for " + to_string(n) + " queens\n");
   vector<thread> workers(n);
   atomic<unsigned int> ans(0);
-  for (unsigned int c = 0; c < n; ++c) {
+  for (auto c = 0u; c < n; ++c) {
     // workers[c] = thread(accumulateAll, ref(ans), c, n,
     // ref(w));
     workers[c] = thread([&ans, c, n] { accumulateAll(ans, c, n); });
