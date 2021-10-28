@@ -8,6 +8,7 @@
 #include <functional>
 #include <future>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <queue>
 #include <set>
@@ -113,15 +114,7 @@ class ThreadPool {
   }
 };
 
-// struct QState {
-// int row, col;
-// bitset<48> pDiag, nDiag, column;
-// array<int, 48> board{0};
-// QState(int r = 0, int c = 0) : row(r), col(c) {}
-//};
-
-// static bool found;
-ThreadPool pool{thread::hardware_concurrency()};
+ThreadPool pool{thread::hardware_concurrency() * 2};
 atomic<bool> found(false);
 
 struct NQueens {
@@ -131,25 +124,37 @@ struct NQueens {
   // int row = 0, col = 0;
   bitset<64> pDiag, nDiag, column;
   array<int, 48> board{0};
-  array<unsigned long, 48> tracker{0};
+  array<unsigned long long, 48> tracker{0};
   bool child = false;
+  unsigned long long threshold;
+  unsigned long long max = std::numeric_limits<unsigned long long>::max();
+  // unsigned long long lthreshold;
   // mutex mtx;
-  NQueens(int n) : n(n) {}
+  // NQueens(int n) : n(n) { threshold = pow(2, n) / 1000; }
+  NQueens(int n) : n(n) {
+    // if (n < 40) {
+    // threshold = ;
+    // lthreshold = threshold / 10000;
+    //} else {
+    // threshold = pow(2, n) / 1000;
+    // lthreshold = threshold / 10000;
+    //}
+
+    // threshold = pow(2, n) / 1000;
+    // lthreshold = threshold / 1000;
+    threshold = 10000000;
+    // lthreshold = 1000000;
+    //} else if (n >= 30) {
+    //}
+    // threshold = 10000000;
+  }
+  // NQueens(int n) : n(n) {}
 
   bool all(int r = 0) {
     if (r == n) {
       // state;
       ans += 1;
-      // pool.enqueue([&board = this->board, n = this->n] {
-      // w.writeBoard(vector<int>(board.begin(), board.begin() + n));
       w.writeArr(board, n);
-      //});
-      // w.writeBoard(std::move(vector<int>(board.begin(), board.begin() + n)));
-      //
-      // print_state();
-      // saveState(r, 0);
-      // auto cp = copyState();
-      // costly_state();
       return true;
     }
     for (auto c = 0u; c < n; c++) {
@@ -170,66 +175,28 @@ struct NQueens {
     }
 
     if (r == n && checker()) {
-      // state;
       ans += 1;
       found = true;
-      // costly_print();
-      // fmt::print("{}\n",board);
       costly_state();
-      // fmt::print("~~check col {} {} {}\n", board[20], column[board[20]],
-      // column[20]);
       genDot();
-
-      // fmt::print("{}\n",
-      // vector<int>(tracker.begin(), tracker.begin() + n));
       return true;
     }
-    // if (r == 0) {
-    // fmt::print("zero {}\n", r);
-    // fmt::print("future {}\n", pool.enqueue([&] {
-    // int c = 1;
-    // NQueens q(n);
-    // q.board[r] = c;
-    // q.column[c] = q.nDiag[r - c + n - 1] =
-    // q.pDiag[r + c] = 1;
-    // return q.first(1);
-    //})
-    //.get());
-    //}
 
     for (auto c = 0u; c < n; c++) {
       // for (auto c = offset + (0u - offset) * bool(r); c < n; c++) {
       // col = c;
       if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c] && !ans) {
-        // if (r == 18) {
-        // fmt::print("spawn [{}][{}] cc {}\n", r, c, ++cc);
-        // fmt::print("spawn {}\n",
-        // vector<int>(board.begin(), board.begin() + n));
-        //}
-        // bool tf = false;
-        // if (tracker[r] > 1000000) {
-        // if (r > n / 2 && tracker[r] >1000000) {
-        // tf = pool.enqueue([&, c, r] {
-        // NQueens q(n);
-        // q.board = board;
-        // q.column = column;
-        // q.nDiag = nDiag;
-        // q.pDiag = pDiag;
-        // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] = 1;
-        // q.board[r] = c;
-        // return q.first(r + 1);
-        //})
-        //.get();
-        //} else {
-        // column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
-        // board[r] = c;
-        //}
         column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
         board[r] = c;
 
-        // if () {
         // if (!child && r > n / 2 + n / 4 && pool.size() < 100) {
-        if (!child && tracker[r] > 10000000 && pool.size() < 100) {
+        // if (!child && tracker[r] > threshold && pool.size() < 100 &&
+        // r > 0.6 * n) {
+        // if (!child && r > 0.35 * n && pool.size() < 1000 &&
+        // tracker[r] > threshold) {
+        if (!child && tracker[r] > threshold && pool.size() < 1000) {
+          // if (!child && tracker[r] > 10000000 && pool.size() < 100) {
+          // fmt::print("{}\n", tracker[r]);
           pool.enqueue([&, c, r] {
             NQueens q(n);
             q.board = board;
@@ -237,43 +204,32 @@ struct NQueens {
             q.nDiag = nDiag;
             q.pDiag = pDiag;
             q.child = true;
-            q.tracker = tracker;
+            // q.tracker = tracker;
             // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] =
             // 1; q.board[r] = c;
             q.first(r + 1);
           });
-        } else if (child || tracker[r] < 1000000) {
+          //} else if (child || tracker[r] < lthreshold) {
+        } else if (child || tracker[r] < 900000) {
           if (first(r + 1)) {
-            // cout << "sol in " << r << "\n";
-            // fmt::print("sol r {}, c {}\n", r, c);
             return true;
           }
         }
         // backtrack
-        tracker[r]++;
-        // if (r == (n - 1) / 2)
-        // fmt::print("no sol r:{} c:{}\n", r, c);
+        if (tracker[r] < max)
+          tracker[r]++;
         column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 0;
       }
     }
     return false;
   }
 
-  void print_state() {
-    // vector<int> tmp(state.board.begin(), state.board.begin() + n);
-    // fmt::print("{}\n", tmp);
-    // fmt::print("{}\n", ans);
-    cout << ans << "\n";
-  }
+  void print_state() { cout << ans << "\n"; }
 
   void costly_state() {
     // unique_lock<mutex> lk(mtx);
     fmt::print("{}\n", vector<int>(board.begin(), board.begin() + n));
     fmt::print("checker: {}\n", checker());
-    // for (auto i = 0u; i < n - 1; i++) {
-    // cout << board[i] + 1 << ' ';
-    //}
-    // cout << board[n - 1] + 1 << '\n';
   }
   void costly_print() {
     auto vec = vector<int>(board.begin(), board.begin() + n);
@@ -360,15 +316,7 @@ void accumulateAll(atomic<unsigned int>& ans,
   ans.fetch_add(q.ans);
 }
 
-// void solve(ThreadPool& pool, int n) {
 void solve_all(int n) {
-  // NQueens q(n);
-  // q.all();
-  // q.print_state();
-
-  // auto synchronizedFile =
-  // make_shared<SynchronizedFile>("solutions.txt", n);
-  // Writer w(synchronizedFile);
   w.write("#Solutions for " + to_string(n) + " queens\n");
   atomic<unsigned int> ans(0);
   {
@@ -400,10 +348,6 @@ void solve_first(int n) {
 
 int main(int argc, char** argv) {
   {
-    // ThreadPool pool{thread::hardware_concurrency()};
-    // ThreadPool pool{6};
-    // pool.enqueue([&] { solve_first(atoi(argv[1])); });
-    // solve(pool, atoi(argv[1]));
     auto mode = std::string(argv[2]);
     auto n = std::atoi(argv[4]);
     fmt::print("{} {}\n", mode, n);
