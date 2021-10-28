@@ -3,5 +3,5 @@
 > Ivan R. Buendia Gutierrez
 
 ```
-cmake -B build . && make -C build"
+cmake -B build . && make -C build
 ```
