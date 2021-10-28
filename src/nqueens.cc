@@ -29,14 +29,21 @@ class Log {
   }
   void write(const string& log) {
     lock_guard<mutex> lock(m_lock);
-    file << log << '\n';
+    file << log;
   }
-  void writeBoard(vector<int>&& n) {
+  // void writeBoard(vector<int>&& n) {
+  // lock_guard<mutex> lock(m_lock);
+  // for (auto i = 0u; i < n.size() - 1; i++) {
+  // file << n[i] << " ";
+  //}
+  // file << n.back() << "\n";
+  //}
+  void writeArr(array<int, 48>& n, int sz) {
     lock_guard<mutex> lock(m_lock);
-    for (auto i = 0u; i < n.size() - 1; i++) {
+    for (auto i = 0u; i < sz - 1; i++) {
       file << n[i] << " ";
     }
-    file << n.back() << "\n";
+    file << n[sz - 1] << "\n";
   }
   void close() { file.close(); }
 
@@ -119,7 +126,7 @@ struct NQueens {
   int n;  // OPtimizable
   // NQueensState state;
   int ans = 0;
-  int row = 0, col = 0;
+  // int row = 0, col = 0;
   bitset<48> pDiag, nDiag, column;
   array<int, 48> board{0};
   array<int, 48> tracker{0};
@@ -132,8 +139,9 @@ struct NQueens {
       ans += 1;
       // pool.enqueue([&board = this->board, n = this->n] {
       // w.writeBoard(vector<int>(board.begin(), board.begin() + n));
+      w.writeArr(board, n);
       //});
-      w.writeBoard(vector<int>(board.begin(), board.begin() + n));
+      // w.writeBoard(std::move(vector<int>(board.begin(), board.begin() + n)));
       //
       // print_state();
       // saveState(r, 0);
@@ -163,6 +171,7 @@ struct NQueens {
       ans += 1;
       found = true;
       costly_print();
+      genDot();
       // fmt::print("{}\n",
       // vector<int>(tracker.begin(), tracker.begin() + n));
       return true;
@@ -203,11 +212,11 @@ struct NQueens {
       // col = c;
       // for (auto c = offset + (0u - offset) * bool(r); c < n; c++) {
       if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c] && !ans) {
-        if (r == 18) {
-          fmt::print("spawn [{}][{}] cc {}\n", r, c, ++cc);
-          fmt::print("spawn {}\n",
-                     vector<int>(board.begin(), board.begin() + n));
-        }
+        // if (r == 18) {
+        // fmt::print("spawn [{}][{}] cc {}\n", r, c, ++cc);
+        // fmt::print("spawn {}\n",
+        // vector<int>(board.begin(), board.begin() + n));
+        //}
         // if (tracker[r] > 1000000 && c + 2 < n) {
         // fmt::print("spawn [{}][{}]\n", r, c);
         // cout << column << "\n";
@@ -271,6 +280,34 @@ struct NQueens {
       cout << "\n";
     }
   }
+  void genDot() {
+    auto dotFile = std::vector<std::vector<string>>(n);
+    std::fill(dotFile.begin(), dotFile.end(), vector<std::string>(n));
+    for (auto i = 0u; i < n; i++) {
+      // dotFile[i] = std::vector<std::string>(n);
+      // std::fill()
+      // for (auto j = 0u; j < n; j++) {
+      std::fill(dotFile[i].begin(), dotFile[i].end(), "</td><td>    ");
+      dotFile[i].front() = "<tr><td> ";
+      dotFile[i].back() = "</td><td> </td></tr>\n";
+      if (board[i] == n - 1)
+        dotFile[i][board[i]] = "</td><td>&#9813; </td></tr>\n";
+      else if (board[i] && board[i] < n - 1)
+        dotFile[i][board[i]] = "</td><td>&#9813; ";
+      else
+        dotFile[i][board[i]] = "<tr><td>&#9813; ";
+      //}
+    }
+    w.write(
+        "digraph D {\nnode [shape=plaintext]\nsome_node [\nlabel=<\n<table "
+        "border=\"1\" cellspacing=\"0\">\n");
+    for (auto i = 0u; i < n; i++) {
+      for (auto j = 0u; j < n; j++) {
+        w.write(dotFile[i][j]);
+      }
+    }
+    w.write("</table>>\n];\n}\n");
+  }
 };
 
 void accumulateAll(atomic<unsigned int>& ans,
@@ -297,7 +334,7 @@ void solve_all(int n) {
   // auto synchronizedFile =
   // make_shared<SynchronizedFile>("solutions.txt", n);
   // Writer w(synchronizedFile);
-  w.write("#Solutions for " + to_string(n) + " queens");
+  w.write("#Solutions for " + to_string(n) + " queens\n");
   atomic<unsigned int> ans(0);
   {
     ThreadPool poolAll(12);
@@ -308,7 +345,7 @@ void solve_all(int n) {
   fmt::print("{}\n", ans);
 }
 void solve_all_n_threads(int n) {
-  w.write("#Solutions for " + to_string(n) + " queens");
+  w.write("#Solutions for " + to_string(n) + " queens\n");
   vector<thread> workers(n);
   atomic<unsigned int> ans(0);
   for (unsigned int c = 0; c < n; ++c) {
@@ -332,13 +369,18 @@ int main(int argc, char** argv) {
     // ThreadPool pool{6};
     // pool.enqueue([&] { solve_first(atoi(argv[1])); });
     // solve(pool, atoi(argv[1]));
-    auto n = atoi(argv[1]);
-    // if (n > 16) {
-    // solve_all(n);
-    //} else {
-    solve_all_n_threads(n);
-    //}
-    // solve_first(atoi(argv[1]));
+    auto mode = std::string(argv[2]);
+    auto n = std::atoi(argv[4]);
+    fmt::print("{} {}\n", mode, n);
+    if (mode == "all") {
+      if (n > 16) {
+        solve_all(n);
+      } else {
+        solve_all_n_threads(n);
+      }
+    } else {
+      solve_first(n);
+    }
   }
 
   return 0;
