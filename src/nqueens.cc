@@ -12,6 +12,7 @@
 #include <mutex>
 #include <queue>
 #include <set>
+#include <string>
 #include <thread>
 #include <vector>
 using namespace std;
@@ -21,6 +22,7 @@ class Log {
   mutex m_lock;
   ofstream file;
   string m_file_path;
+  vector<vector<int>> solutions;
 
  public:
   Log(const string& file_path) : m_file_path(file_path) {
@@ -29,17 +31,19 @@ class Log {
       // throw relevant exception.
     }
   }
+  Log() {}
+  void open(const string& filepath) {
+    m_file_path = filepath;
+    file.open(m_file_path.c_str());
+  }
   void write(const string& log) {
     lock_guard<mutex> lock(m_lock);
     file << log;
   }
-  // void writeBoard(vector<int>&& n) {
-  // lock_guard<mutex> lock(m_lock);
-  // for (auto i = 0u; i < n.size() - 1; i++) {
-  // file << n[i] << " ";
-  //}
-  // file << n.back() << "\n";
-  //}
+  void addSol(vector<int>&& sol) {
+    lock_guard<mutex> lock(m_lock);
+    solutions.push_back(sol);
+  }
   void writeArr(array<int, 48>& n, int sz) {
     lock_guard<mutex> lock(m_lock);
     for (auto i = 0u; i < sz - 1; i++) {
@@ -47,12 +51,31 @@ class Log {
     }
     file << n[sz - 1] << "\n";
   }
+  void writeVec(vector<int>& n) {
+    lock_guard<mutex> lock(m_lock);
+    for (auto i = 0u; i < n.size() - 1; i++) {
+      file << n[i] << " ";
+    }
+    file << n.back() << "\n";
+  }
+  void writeAll() {
+    // lock_guard<mutex> lock(m_lock);
+    for (auto& s : solutions) {
+      writeVec(s);
+    }
+  }
+
   void close() { file.close(); }
 
   ~Log() { close(); }
 };
 
-Log w("solutions.txt");
+Log w;
+Log dot;
+// Log w("solutions.txt");
+// Log dot("solution.dot");
+
+mutex m_lock;
 
 class ThreadPool {
  public:
@@ -120,7 +143,7 @@ atomic<bool> found(false);
 struct NQueens {
   int n;  // OPtimizable
   // NQueensState state;
-  int ans = 0;
+  unsigned long long ans = 0;
   // int row = 0, col = 0;
   bitset<64> pDiag, nDiag, column;
   array<int, 48> board{0};
@@ -128,33 +151,15 @@ struct NQueens {
   bool child = false;
   unsigned long long threshold;
   unsigned long long max = std::numeric_limits<unsigned long long>::max();
-  // unsigned long long lthreshold;
-  // mutex mtx;
-  // NQueens(int n) : n(n) { threshold = pow(2, n) / 1000; }
-  NQueens(int n) : n(n) {
-    // if (n < 40) {
-    // threshold = ;
-    // lthreshold = threshold / 10000;
-    //} else {
-    // threshold = pow(2, n) / 1000;
-    // lthreshold = threshold / 10000;
-    //}
-
-    // threshold = pow(2, n) / 1000;
-    // lthreshold = threshold / 1000;
-    threshold = 10000000;
-    // lthreshold = 1000000;
-    //} else if (n >= 30) {
-    //}
-    // threshold = 10000000;
-  }
-  // NQueens(int n) : n(n) {}
+  // vector<vector<int>> solutions;
+  NQueens(int n) : n(n) { threshold = 10000000; }
 
   bool all(int r = 0) {
     if (r == n) {
       // state;
       ans += 1;
-      w.writeArr(board, n);
+      w.addSol(vector<int>(board.begin(), board.begin() + n));
+      // w.writeArr(board, n);
       return true;
     }
     for (auto c = 0u; c < n; c++) {
@@ -174,7 +179,7 @@ struct NQueens {
       return true;
     }
 
-    if (r == n && checker()) {
+    if (!found && r == n && checker()) {
       ans += 1;
       found = true;
       costly_state();
@@ -185,7 +190,7 @@ struct NQueens {
     for (auto c = 0u; c < n; c++) {
       // for (auto c = offset + (0u - offset) * bool(r); c < n; c++) {
       // col = c;
-      if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c] && !ans) {
+      if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c]) {
         column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
         board[r] = c;
 
@@ -246,6 +251,7 @@ struct NQueens {
     }
   }
   void genDot() {
+      lock_guard<mutex> lock(m_lock);
     auto dotFile = std::vector<std::vector<string>>(n);
     std::fill(dotFile.begin(), dotFile.end(), vector<std::string>(n));
     for (auto i = 0u; i < n; i++) {
@@ -262,15 +268,15 @@ struct NQueens {
       else
         dotFile[i][board[i]] = "<tr><td>&#9813; ";
     }
-    w.write(
+    dot.write(
         "digraph D {\nnode [shape=plaintext]\nsome_node [\nlabel=<\n<table "
         "border=\"1\" cellspacing=\"0\">\n");
     for (auto i = 0u; i < n; i++) {
       for (auto j = 0u; j < n; j++) {
-        w.write(dotFile[i][j]);
+        dot.write(dotFile[i][j]);
       }
     }
-    w.write("</table>>\n];\n}\n");
+    dot.write("</table>>\n];\n}\n");
   }
   bool checker() {
     vector<vector<int>> v(n);
@@ -325,6 +331,8 @@ void solve_all(int n) {
       poolAll.enqueue([&ans, c, n] { accumulateAll(ans, c, n); });
     }
   }
+  w.write(std::to_string(ans) + "\n");
+  w.writeAll();
   fmt::print("{}\n", ans);
 }
 void solve_all_n_threads(int n) {
@@ -339,9 +347,12 @@ void solve_all_n_threads(int n) {
   for (auto& w : workers) {
     w.join();
   }
+  w.write(std::to_string(ans) + "\n");
+  w.writeAll();
   fmt::print("{}\n", ans);
 }
 void solve_first(int n) {
+  w.close();
   NQueens q(n);
   q.first();
 }
@@ -352,12 +363,14 @@ int main(int argc, char** argv) {
     auto n = std::atoi(argv[4]);
     fmt::print("{} {}\n", mode, n);
     if (mode == "all") {
+      w.open("solutions.txt");
       if (n > 16) {
         solve_all(n);
       } else {
         solve_all_n_threads(n);
       }
     } else {
+      dot.open("solution.dot");
       solve_first(n);
     }
   }
