@@ -1,61 +1,263 @@
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 #include <algorithm>
-#include <atomic>
+#include <array>
 #include <bitset>
-#include <cstdlib>
+#include <condition_variable>
+#include <fstream>
 #include <functional>
+#include <future>
 #include <iostream>
+#include <mutex>
+#include <queue>
 #include <thread>
 #include <vector>
 using namespace std;
 
-struct Wrapper {
-  unsigned int n;
-  bitset<64> column, diag1, diag2;
-  array<int, 64> board;
+class Log {
+ private:
+  mutex m_lock;
+  ofstream file;
+  string m_file_path;
 
-  Wrapper(const unsigned int n) : n(n) {}
-
-  bool solveNQueen(const unsigned int r, unsigned int& ans) {
-    // void solveNQueen(const unsigned int r, unsigned int& ans) {
-    if (r == n) {
-      ans++;
-      return true;
-      // return;
+ public:
+  Log(const string& file_path) : m_file_path(file_path) {
+    file.open(m_file_path.c_str());
+    if (!file.is_open() || !file.good()) {
+      // throw relevant exception.
     }
-    for (int c = 0; c < n; c++) {
-      if (!column[c] && !diag1[r - c + n - 1] && !diag2[r + c]) {
-        column[c] = diag1[r - c + n - 1] = diag2[r + c] = 1;
-        solveNQueen(r + 1, ans);
-        // backtrack
-        column[c] = diag1[r - c + n - 1] = diag2[r + c] = 0;
-      }
-    }
-    return false;
   }
-  bool solveFirst(const unsigned int r, unsigned int& ans) {
-    // void solveNQueen(const unsigned int r, unsigned int& ans) {
+  void write(const string& log) {
+    lock_guard<mutex> lock(m_lock);
+    file << log << '\n';
+  }
+  void writeBoard(vector<int>&& n) {
+    lock_guard<mutex> lock(m_lock);
+    for (auto i = 0u; i < n.size() - 1; i++) {
+      file << n[i] << " ";
+    }
+    file << n.back() << "\n";
+  }
+  void close() { file.close(); }
+
+  ~Log() { close(); }
+};
+
+Log w("solutions.txt");
+
+class ThreadPool {
+ public:
+  using Task = function<void()>;
+  explicit ThreadPool(size_t numThreads) { start(numThreads); }
+  ~ThreadPool() { stop(); }
+  template <class T>
+  auto enqueue(T task) -> future<decltype(task())> {
+    auto wrapper = make_shared<packaged_task<decltype(task())()>>(move(task));
+    {
+      unique_lock<mutex> lock{mEventMutex};
+      mTasks.emplace([=] { (*wrapper)(); });
+    }
+    mEventVar.notify_one();
+    return wrapper->get_future();
+  }
+
+ private:
+  vector<thread> mThreads;
+  condition_variable mEventVar;
+  mutex mEventMutex;
+  bool mStopping = false;
+  queue<Task> mTasks;
+
+  void start(size_t numThreads) {
+    for (auto i = 0u; i < numThreads; ++i) {
+      mThreads.emplace_back([=] {
+        while (true) {
+          Task task;
+
+          {
+            unique_lock<mutex> lock{mEventMutex};
+            mEventVar.wait(lock, [=] { return mStopping || !mTasks.empty(); });
+            if (mStopping && mTasks.empty())
+              break;
+
+            task = move(mTasks.front());
+            mTasks.pop();
+          }
+
+          task();
+        }
+      });
+    }
+  }
+
+  void stop() noexcept {
+    {
+      unique_lock<mutex> lock{mEventMutex};
+      mStopping = true;
+    }
+    mEventVar.notify_all();
+    for (auto& thread : mThreads)
+      thread.join();
+  }
+};
+
+// struct QState {
+// int row, col;
+// bitset<48> pDiag, nDiag, column;
+// array<int, 48> board{0};
+// QState(int r = 0, int c = 0) : row(r), col(c) {}
+//};
+
+// static bool found;
+ThreadPool pool{thread::hardware_concurrency()};
+atomic<bool> found(false);
+int cc = 0;
+
+auto stream = stdout;
+
+struct NQueens {
+  int n;  // OPtimizable
+  // NQueensState state;
+  int ans = 0;
+  int row = 0, col = 0;
+  bitset<48> pDiag, nDiag, column;
+  array<int, 48> board{0};
+  array<int, 48> tracker{0};
+  // mutex mtx;
+  NQueens(int n) : n(n) {}
+
+  bool all(int r = 0) {
     if (r == n) {
-      ++ans;
-      costlyPrint();
+      // state;
+      ans += 1;
+      // pool.enqueue([&board = this->board, n = this->n] {
+      // w.writeBoard(vector<int>(board.begin(), board.begin() + n));
+      //});
+      w.writeBoard(vector<int>(board.begin(), board.begin() + n));
+      //
+      // print_state();
+      // saveState(r, 0);
+      // auto cp = copyState();
+      // costly_state();
       return true;
     }
     for (auto c = 0u; c < n; c++) {
-      // if (!column[c] && !diag1[r - c + n - 1] && !diag2[r + c]) {
-      if (!column[c] && !diag1[r - c + n - 1] && !diag2[r + c] && !ans) {
-        column[c] = diag1[r - c + n - 1] = diag2[r + c] = 1;
+      if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c]) {
+        column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
         board[r] = c;
-        if (solveFirst(r + 1, ans)) {
-          return true;
-        }
+        all(r + 1);
         // backtrack
-        column[c] = diag1[r - c + n - 1] = diag2[r + c] = 0;
+        column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 0;
       }
     }
     return false;
   }
-  void costlyPrint() {
+  bool first(int r = 0) {
+    if (found) {
+      // fmt::print("found in another thread");
+      return true;
+    }
+
+    if (r == n) {
+      // state;
+      ans += 1;
+      found = true;
+      costly_print();
+      // fmt::print("{}\n",
+      // vector<int>(tracker.begin(), tracker.begin() + n));
+      return true;
+    }
+    // if (r == 0) {
+    // fmt::print("zero {}\n", r);
+    // fmt::print("future {}\n", pool.enqueue([&] {
+    // int c = 1;
+    // NQueens q(n);
+    // q.board[r] = c;
+    // q.column[c] = q.nDiag[r - c + n - 1] =
+    // q.pDiag[r + c] = 1;
+    // return q.first(1);
+    //})
+    //.get());
+    //}
+    // auto c = 0u;
+    // row = r;
+
+    // if (tracker[r] > 1000000 && col + 2 < n) {
+    // fmt::print("spawn [{}][{}]\n", r, col);
+    // pool.enqueue([&, c = col + 2, r] {
+    // cout << "var c " << c << "\n";
+    // NQueens q(n);
+    //// auto c = col + 1;
+    // q.board = board;
+    // q.column = column;
+    // q.nDiag = nDiag;
+    // q.pDiag = pDiag;
+    // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] = 1;
+    // q.board[r] = c;
+    // q.first(r + 1);
+    //});
+    // fmt::print("tracker [{}][{}] {}\n", r, c, tracker[r]);
+    //}
+
+    for (auto c = 0u; c < n; c++) {
+      // col = c;
+      // for (auto c = offset + (0u - offset) * bool(r); c < n; c++) {
+      if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c] && !ans) {
+        if (r == 18) {
+          fmt::print("spawn [{}][{}] cc {}\n", r, c, ++cc);
+          fmt::print("spawn {}\n",
+                     vector<int>(board.begin(), board.begin() + n));
+        }
+        // if (tracker[r] > 1000000 && c + 2 < n) {
+        // fmt::print("spawn [{}][{}]\n", r, c);
+        // cout << column << "\n";
+        // fmt::print("{}\n", column);
+        // pool.enqueue([&, c = c + 1, r] {
+        // cout << "var r " << r << "var c " << c << "\n";
+        // NQueens q(n);
+        // q.board = board;
+        // q.column = column;
+        // q.nDiag = nDiag;
+        // q.pDiag = pDiag;
+        // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] = 1;
+        // q.board[r] = c;
+        // q.first(r + 1);
+        //});
+        // fmt::print("tracker [{}][{}] {}\n", r, c, tracker[r]);
+        //}
+        column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
+        board[r] = c;
+        if (first(r + 1)) {
+          // cout << "sol in " << r << "\n";
+          // fmt::print("sol r {}, c {}\n", r, c);
+          return true;
+        }
+        // backtrack
+        tracker[r]++;
+        // if (r == (n - 1) / 2)
+        // fmt::print("no sol r:{} c:{}\n", r, c);
+        column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 0;
+      }
+    }
+    return false;
+  }
+
+  void print_state() {
+    // vector<int> tmp(state.board.begin(), state.board.begin() + n);
+    // fmt::print("{}\n", tmp);
+    // fmt::print("{}\n", ans);
+    cout << ans << "\n";
+  }
+
+  void costly_state() {
+    // unique_lock<mutex> lk(mtx);
+    fmt::print("{}\n", vector<int>(board.begin(), board.begin() + n));
+    // for (auto i = 0u; i < n - 1; i++) {
+    // cout << board[i] + 1 << ' ';
+    //}
+    // cout << board[n - 1] + 1 << '\n';
+  }
+  void costly_print() {
     auto vec = vector<int>(board.begin(), board.begin() + n);
     for_each(vec.begin(), vec.end(), [](auto& d) { d += 1; });
     fmt::print("({}) {}\n", vec.size(), vec);
@@ -71,44 +273,73 @@ struct Wrapper {
   }
 };
 
-void accumulateAnswers(atomic<unsigned int>& ans,
-                       const unsigned int col,
-                       const unsigned int n) {
+void accumulateAll(atomic<unsigned int>& ans,
+                   const unsigned int col,
+                   const unsigned int n) {
   // unsigned int r = 0;
-  unsigned int tmp = 0;
-  Wrapper queens(n);
-  queens.column[col] = 1;
-  queens.diag1[0 - col + n - 1] = 1;
-  queens.diag2[0 + col] = 1;
-  queens.solveNQueen(0 + 1, tmp);
-  ans.fetch_add(tmp);
+  // unsigned int tmp = 0;
+  auto r = 0u;
+  NQueens q(n);
+  q.board[r] = col;
+  q.column[col] = 1;
+  q.nDiag[r - col + n - 1] = 1;
+  q.pDiag[r + col] = 1;
+  q.all(r + 1);
+  ans.fetch_add(q.ans);
 }
 
-void queensThreads(const unsigned int n, atomic<unsigned int>& ans) {
+// void solve(ThreadPool& pool, int n) {
+void solve_all(int n) {
+  // NQueens q(n);
+  // q.all();
+  // q.print_state();
+
+  // auto synchronizedFile =
+  // make_shared<SynchronizedFile>("solutions.txt", n);
+  // Writer w(synchronizedFile);
+  w.write("#Solutions for " + to_string(n) + " queens");
+  atomic<unsigned int> ans(0);
+  {
+    ThreadPool poolAll(12);
+    for (auto c = 0u; c < n; ++c) {
+      poolAll.enqueue([&ans, c, n] { accumulateAll(ans, c, n); });
+    }
+  }
+  fmt::print("{}\n", ans);
+}
+void solve_all_n_threads(int n) {
+  w.write("#Solutions for " + to_string(n) + " queens");
   vector<thread> workers(n);
+  atomic<unsigned int> ans(0);
   for (unsigned int c = 0; c < n; ++c) {
-    workers[c] = thread(accumulateAnswers, std::ref(ans), c, n);
-    // workers[c] = thread([&ans, c, n] { accumulateAnswers(ans, c, n); });
+    // workers[c] = thread(accumulateAll, ref(ans), c, n,
+    // ref(w));
+    workers[c] = thread([&ans, c, n] { accumulateAll(ans, c, n); });
   }
   for (auto& w : workers) {
     w.join();
   }
+  fmt::print("{}\n", ans);
+}
+void solve_first(int n) {
+  NQueens q(n);
+  q.first();
 }
 
-unsigned int queensFirst(const unsigned int n) {
-  Wrapper queens(n);
-  auto ans = 0u;
-  queens.solveFirst(0, ans);
-  return ans;
-}
-
-int main(int argc, char* argv[]) {
-  const unsigned int n = atoi(argv[1]);
-  // atomic<unsigned int> ans(0);
-  // solveNQueen(0, n, ans);
-  // queensThreads(n, ans);
-  // cout << ans << endl;
-  cout << queensFirst(n) << '\n';
+int main(int argc, char** argv) {
+  {
+    // ThreadPool pool{thread::hardware_concurrency()};
+    // ThreadPool pool{6};
+    // pool.enqueue([&] { solve_first(atoi(argv[1])); });
+    // solve(pool, atoi(argv[1]));
+    auto n = atoi(argv[1]);
+    // if (n > 16) {
+    // solve_all(n);
+    //} else {
+    solve_all_n_threads(n);
+    //}
+    // solve_first(atoi(argv[1]));
+  }
 
   return 0;
 }
