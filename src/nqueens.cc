@@ -188,20 +188,11 @@ struct NQueens {
     }
 
     for (auto c = 0u; c < n; c++) {
-      // for (auto c = offset + (0u - offset) * bool(r); c < n; c++) {
-      // col = c;
       if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c]) {
         column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
         board[r] = c;
 
-        // if (!child && r > n / 2 + n / 4 && pool.size() < 100) {
-        // if (!child && tracker[r] > threshold && pool.size() < 100 &&
-        // r > 0.6 * n) {
-        // if (!child && r > 0.35 * n && pool.size() < 1000 &&
-        // tracker[r] > threshold) {
         if (!child && tracker[r] > threshold && pool.size() < 1000) {
-          // if (!child && tracker[r] > 10000000 && pool.size() < 100) {
-          // fmt::print("{}\n", tracker[r]);
           pool.enqueue([&, c, r] {
             NQueens q(n);
             q.board = board;
@@ -209,9 +200,6 @@ struct NQueens {
             q.nDiag = nDiag;
             q.pDiag = pDiag;
             q.child = true;
-            // q.tracker = tracker;
-            // q.column[c] = q.nDiag[r - c + n - 1] = q.pDiag[r + c] =
-            // 1; q.board[r] = c;
             q.first(r + 1);
           });
           //} else if (child || tracker[r] < lthreshold) {
@@ -251,7 +239,7 @@ struct NQueens {
     }
   }
   void genDot() {
-      lock_guard<mutex> lock(m_lock);
+    lock_guard<mutex> lock(m_lock);
     auto dotFile = std::vector<std::vector<string>>(n);
     std::fill(dotFile.begin(), dotFile.end(), vector<std::string>(n));
     for (auto i = 0u; i < n; i++) {
