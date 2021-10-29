@@ -5,3 +5,11 @@
 ```
 cmake -B build . && make -C build
 ```
+
+```
+./build/nqueens -problemType all -N 5
+```
+
+```
+dot -Tpng solution.dot -o queens.png && sxiv queens.png
+```
