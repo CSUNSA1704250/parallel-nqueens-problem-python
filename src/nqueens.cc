@@ -1,5 +1,5 @@
-#include <fmt/core.h>
-#include <fmt/ranges.h>
+//#include <fmt/core.h>
+//#include <fmt/ranges.h>
 #include <algorithm>
 #include <array>
 #include <bitset>
@@ -221,20 +221,20 @@ struct NQueens {
 
   void costly_state() {
     // unique_lock<mutex> lk(mtx);
-    fmt::print("{}\n", vector<int>(board.begin(), board.begin() + n));
-    fmt::print("checker: {}\n", checker());
+    // fmt::print("{}\n", vector<int>(board.begin(), board.begin() + n));
+    // fmt::print("checker: {}\n", checker());
   }
   void costly_print() {
     auto vec = vector<int>(board.begin(), board.begin() + n);
     for_each(vec.begin(), vec.end(), [](auto& d) { d += 1; });
-    fmt::print("({}) {}\n", vec.size(), vec);
+    // fmt::print("({}) {}\n", vec.size(), vec);
     auto b = vector<string>(n);
     // bitset<n> b;
 
     for (auto i = 0u; i < n; i++) {
       fill(b.begin(), b.end(), " ");
       b[board[i]] = "█";
-      for_each(b.begin(), b.end(), [](auto& e) { fmt::print("[{}]", e); });
+      // for_each(b.begin(), b.end(), [](auto& e) { fmt::print("[{}]", e); });
       cout << "\n";
     }
   }
@@ -321,7 +321,7 @@ void solve_all(int n) {
   }
   w.write(std::to_string(ans) + "\n");
   w.writeAll();
-  fmt::print("{}\n", ans);
+  // fmt::print("{}\n", ans);
 }
 void solve_all_n_threads(int n) {
   w.write("#Solutions for " + to_string(n) + " queens\n");
@@ -337,7 +337,7 @@ void solve_all_n_threads(int n) {
   }
   w.write(std::to_string(ans) + "\n");
   w.writeAll();
-  fmt::print("{}\n", ans);
+  // fmt::print("{}\n", ans);
 }
 void solve_first(int n) {
   w.close();
@@ -349,7 +349,7 @@ int main(int argc, char** argv) {
   {
     auto mode = std::string(argv[2]);
     auto n = std::atoi(argv[4]);
-    fmt::print("{} {}\n", mode, n);
+    // fmt::print("{} {}\n", mode, n);
     if (mode == "all") {
       w.open("solutions.txt");
       if (n > 16) {
