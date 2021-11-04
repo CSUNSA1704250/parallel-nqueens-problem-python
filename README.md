@@ -3,7 +3,7 @@
 > Ivan R. Buendia Gutierrez
 
 ```
-cmake -B build . && make -C build
+mkdir -p build && cmake -B build . && make -C build
 ```
 
 ```
@@ -11,5 +11,5 @@ cmake -B build . && make -C build
 ```
 
 ```
-dot -Tpng solution.dot -o queens.png && sxiv queens.png
+dot -Tpng solution.dot -o queens.png
 ```
