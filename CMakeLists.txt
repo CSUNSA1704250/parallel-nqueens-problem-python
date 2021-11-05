@@ -8,7 +8,7 @@ file(GLOB_RECURSE SRC_FILES src/*.cc)
 add_executable(nqueens ${SRC_FILES})
 
 set_property(TARGET nqueens PROPERTY CXX_STANDARD 17)
-target_compile_options(nqueens PUBLIC -O3 -march=native)
+target_compile_options(nqueens PUBLIC)
 
 #find_package(fmt REQUIRED)
 #target_link_libraries(nqueens PUBLIC fmt::fmt)
