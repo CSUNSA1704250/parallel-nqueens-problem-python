@@ -1,9 +1,10 @@
-//#include <fmt/core.h>
-//#include <fmt/ranges.h>
+#include <fmt/core.h>
+#include <fmt/ranges.h>
 #include <algorithm>
 #include <array>
 #include <bitset>
 #include <condition_variable>
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <future>
@@ -21,20 +22,20 @@ class Log {
  private:
   mutex m_lock;
   ofstream file;
-  string m_file_path;
+  string file_path;
   vector<vector<int>> solutions;
 
  public:
-  Log(const string& file_path) : m_file_path(file_path) {
-    file.open(m_file_path.c_str());
+  Log(const string& file_path) : file_path(file_path) {
+    file.open(file_path.c_str());
     if (!file.is_open() || !file.good()) {
       // throw relevant exception.
     }
   }
   Log() {}
   void open(const string& filepath) {
-    m_file_path = filepath;
-    file.open(m_file_path.c_str());
+    file_path = filepath;
+    file.open(file_path.c_str());
   }
   void write(const string& log) {
     lock_guard<mutex> lock(m_lock);
@@ -43,13 +44,6 @@ class Log {
   void addSol(vector<int>& sol) {
     lock_guard<mutex> lock(m_lock);
     solutions.push_back(sol);
-  }
-  void writeArr(array<int, 48>& n, int sz) {
-    lock_guard<mutex> lock(m_lock);
-    for (auto i = 0u; i < sz - 1; i++) {
-      file << n[i] << " ";
-    }
-    file << n[sz - 1] << "\n";
   }
   void writeVec(vector<int>& n) {
     lock_guard<mutex> lock(m_lock);
@@ -72,9 +66,6 @@ class Log {
 
 Log w;
 Log dot;
-// Log w("solutions.txt");
-// Log dot("solution.dot");
-
 mutex m_lock;
 
 class ThreadPool {
@@ -139,18 +130,23 @@ class ThreadPool {
 
 atomic<bool> found(false);
 
-struct AllNqueens {
+struct FNqueens {
   unsigned long long ans = 0;
-  // array<int, 48> board{0};
   vector<int> board;
   int n;
-  bitset<32> _bits;
+  bitset<64> _bits;
+  array<uint64_t, 64> tracker{0};
+  ThreadPool* pool = nullptr;
+  int threshold = 1000000;
+  bool child = false;
 
-  AllNqueens(unsigned long long n) : n(n) {
+  FNqueens(int n) : n(n) {
     for (auto i = 0u; i < n; i++) {
       board.push_back(0);
     }
   }
+
+  FNqueens(int n, vector<int>& board) : n(n), board(board) {}
 
   void all(int rowMask, int ld, int rd, int done) {
     if (rowMask == done) {
@@ -166,10 +162,9 @@ struct AllNqueens {
       }
       return;
     }
-    // if (safe < 0)
     int safe = done & (~(rowMask | ld | rd));
     while (safe) {
-      int i = __builtin_ctz(safe);  // counting trailing zeros
+      int i = __builtin_ctz(safe);
       int p = safe & (-safe);
       safe -= p;
       _bits = rowMask;
@@ -177,23 +172,116 @@ struct AllNqueens {
       all(rowMask | p, (ld | p) << 1, (rd | p) >> 1, done);
     }
   }
+
+  bool firstblock(uint64_t rowMask, uint64_t ld, uint64_t rd, uint64_t done) {
+    if (found) {
+      return true;
+    }
+    if (rowMask == done && !found) {
+      ++ans;
+      fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
+      found = true;
+      genDot();
+      return true;
+    }
+    uint64_t safe = done & (~(rowMask | ld | rd));
+    while (safe) {
+      uint64_t i = __builtin_ctzll(safe);  // counting trailing zeros
+      uint64_t p = safe & (-safe);
+      safe -= p;
+      _bits = rowMask;
+      auto count = _bits.count();
+      board[count] = i;
+      if (found ||
+          firstblock(rowMask | p, (ld | p) << 1ull, (rd | p) >> 1ull, done)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool first(uint64_t rowMask, uint64_t ld, uint64_t rd, uint64_t done) {
+    if (found) {
+      return true;
+    }
+    if (rowMask == done && !found && heavycheker(rowMask, ld, rd, done)) {
+      ++ans;
+      fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
+      found = true;
+      genDot();
+      return true;
+    }
+    uint64_t safe = done & (~(rowMask | ld | rd));
+    while (safe) {
+      uint64_t i = __builtin_ctzll(safe);  // counting trailing zeros
+      uint64_t p = safe & (-safe);
+      safe -= p;
+      _bits = rowMask;
+      auto count = _bits.count();
+      board[count] = i;
+      if (!child && tracker[count] > threshold && pool->size() < 50) {
+        pool->enqueue([&] {
+          FNqueens q(n, board);
+          q.child = true;
+          q.first(rowMask | p, (ld | p) << 1ull, (rd | p) >> 1ull, done);
+        });
+        //} else if (child || tracker[r] < 90000) {
+      } else if (child || tracker[count] < threshold * 0.1) {
+        // return first(r + 1);
+        if (first(rowMask | p, (ld | p) << 1ull, (rd | p) >> 1ull, done)) {
+          return true;
+        }
+      }
+
+      tracker[count]++;
+    }
+    return false;
+  }
+
+  bool heavycheker(uint64_t rowMask, uint64_t ld, uint64_t rd, uint64_t done) {
+    set rows(board.begin(), board.end());
+    return n == rows.size();
+  }
+
+  void genDot() {
+    lock_guard<mutex> lock(m_lock);
+    auto dotFile = vector<vector<string>>(n);
+    fmt::print("{}\n", board);
+    fill(dotFile.begin(), dotFile.end(), vector<string>(n));
+    for (auto i = 0u; i < n; i++) {
+      fill(dotFile[i].begin(), dotFile[i].end(), "</td><td>    ");
+      dotFile[i].front() = "<tr><td> ";
+      dotFile[i].back() = "</td><td> </td></tr>\n";
+      if (board[i] == n - 1)
+        dotFile[i][board[i]] = "</td><td>&#9813; </td></tr>\n";
+      else if (board[i] && board[i] < n - 1)
+        dotFile[i][board[i]] = "</td><td>&#9813; ";
+      else
+        dotFile[i][board[i]] = "<tr><td>&#9813; ";
+    }
+    dot.write(
+        "digraph D {\nnode [shape=plaintext]\nsome_node [\nlabel=<\n<table "
+        "border=\"1\" cellspacing=\"0\">\n");
+    for (auto i = 0u; i < n; i++) {
+      for (auto j = 0u; j < n; j++) {
+        dot.write(dotFile[i][j]);
+      }
+    }
+    dot.write("</table>>\n];\n}\n");
+  }
 };
 
 struct NQueens {
   int n;  // OPtimizable
-  // NQueensState state;
-  unsigned long long ans = 0;
-  // int row = 0, col = 0;
+  uint64_t ans = 0;
   bitset<64> pDiag, nDiag, column;
   array<int, 48> board{0};
   array<unsigned long long, 48> tracker{0};
   bool child = false;
-  unsigned long long threshold;
-  unsigned long long max = std::numeric_limits<unsigned long long>::max();
-  // ThreadPool pool{thread::hardware_concurrency() * 3};
+  uint64_t threshold;
+  uint64_t max = std::numeric_limits<unsigned long long>::max();
   ThreadPool* pool = nullptr;
-  // vector<vector<int>> solutions;
-  NQueens(int n) : n(n) { threshold = 10000000; }
+  NQueens(int n) : n(n) { threshold = 1000000; }
 
   bool all(int r = 0) {
     if (r == n) {
@@ -231,7 +319,6 @@ struct NQueens {
     if (!found && r == n && checker()) {
       ans += 1;
       found = true;
-      // costly_state();
       genDot();
       return true;
     }
@@ -242,42 +329,34 @@ struct NQueens {
 
     for (auto c = 0u; c < n; c++) {
       if (!column[c] && !nDiag[r - c + n - 1] && !pDiag[r + c]) {
+        // col[c] = row[r] = 1;
         column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 1;
         board[r] = c;
 
-        if (!child && tracker[r] > threshold && pool->size() < 500) {
+        if (!child && tracker[r] > threshold && pool->size() < 50) {
           pool->enqueue([&, c, r] {
             NQueens q(n);
             q.board = board;
             q.column = column;
             q.nDiag = nDiag;
             q.pDiag = pDiag;
+            q.tracker = tracker;
             q.child = true;
             q.first(r + 1);
           });
-        } else if (child || tracker[r] < 900000) {
+        } else if (child || tracker[r] < threshold * 0.1) {
           if (first(r + 1)) {
             return true;
           }
         }
-        // backtrack
-        tracker[r]++;
-        column[c] = nDiag[r - c + n - 1] = pDiag[r + c] = 0;
       }
     }
     return false;
   }
 
-  void print_state() { cout << ans << "\n"; }
-
-  // void costly_state() {
-  // unique_lock<mutex> lk(mtx);
-  // fmt::print("{}\n", vector<int>(board.begin(), board.begin() + n));
-  // fmt::print("checker: {}\n", checker());
-  //}
-
   void genDot() {
     lock_guard<mutex> lock(m_lock);
+    fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
     auto dotFile = std::vector<std::vector<string>>(n);
     std::fill(dotFile.begin(), dotFile.end(), vector<std::string>(n));
     for (auto i = 0u; i < n; i++) {
@@ -306,8 +385,8 @@ struct NQueens {
   }
 };
 
-auto accumulateAll_v2(int i, int rowMask, int ld, int rd, int done, int n) {
-  AllNqueens q(n);
+auto get_ans(int i, int rowMask, int ld, int rd, int done, int n) {
+  FNqueens q(n);
   q.board[0] = i;
   q.all(rowMask, ld, rd, done);
   return q.ans;
@@ -326,8 +405,8 @@ void solve_all(int n) {
       p = safe & (-safe);
       safe -= p;
       poolAll.enqueue([&ans, done, n, i, p, rowMask, ld, rd] {
-        ans.fetch_add(accumulateAll_v2(i, rowMask | p, (ld | p) << 1,
-                                       (rd | p) >> 1, done, n));
+        ans.fetch_add(
+            get_ans(i, rowMask | p, (ld | p) << 1, (rd | p) >> 1, done, n));
       });
     }
   }
@@ -343,15 +422,14 @@ void solve_all_n_threads(int n) {
   int rowMask = 0, ld = 0, rd = 0;
   int safe = done & (~(rowMask | ld | rd)), i, p;
 
-  // vector<thread> workers((n + 1) / 2);
   atomic<unsigned long long> ans(0);
   for (auto c = 0u; c < (n + 1) / 2; ++c) {
     i = __builtin_ctz(safe);
     p = safe & (-safe);
     safe -= p;
     workers.push_back(thread([&ans, done, n, i, p, rowMask, ld, rd] {
-      ans.fetch_add(accumulateAll_v2(i, rowMask | p, (ld | p) << 1,
-                                     (rd | p) >> 1, done, n));
+      ans.fetch_add(
+          get_ans(i, rowMask | p, (ld | p) << 1, (rd | p) >> 1, done, n));
     }));
   }
   for (auto& w : workers) {
@@ -359,7 +437,6 @@ void solve_all_n_threads(int n) {
   }
   w.write(std::to_string(ans) + "\n");
   w.writeAll();
-  // fmt::print("{}\n", ans);
 }
 
 void solve_first(int n) {
@@ -370,10 +447,46 @@ void solve_first(int n) {
   q.first();
 }
 
+void solve_firstv2(uint64_t n) {
+  w.close();
+  uint64_t done = (1ull << n) - 1ull;
+  uint64_t rowMask = 0ull, ld = 0ull, rd = 0ull;
+  uint64_t safe = done & (~(rowMask | ld | rd)), i, p;
+  {
+    ThreadPool pool(thread::hardware_concurrency() * 2);
+    for (auto c = 0u; c < (n + 1) / 2; ++c) {
+      i = __builtin_ctzll(safe);
+      p = safe & (-safe);
+      safe -= p;
+      pool.enqueue([&] {
+        FNqueens q(n);
+        q.board[0] = i;
+        cout << q.firstblock(rowMask | p, (ld | p) << 1ull, (rd | p) >> 1ull,
+                             done)
+             << "\n";
+      });
+    }
+  }
+}
+
+void solve_firstv3(uint64_t n) {
+  w.close();
+  {
+    uint64_t done = (1ull << n) - 1ull;
+    ThreadPool pool(thread::hardware_concurrency() * 2);
+    FNqueens q(n);
+    q.pool = &pool;
+    q.first(0ull, 0ull, 0ull, done);
+  }
+}
+
 int main(int argc, char** argv) {
   {
     auto mode = std::string(argv[2]);
     auto n = std::atoi(argv[4]);
+    string extra;
+    if (argc == 6)
+      extra = std::string(argv[5]);
     // fmt::print("{} {}\n", mode, n);
     if (mode == "all") {
       w.open("solutions.txt");
@@ -386,7 +499,13 @@ int main(int argc, char** argv) {
       }
     } else {
       dot.open("solution.dot");
-      solve_first(n);
+      if (extra == "2") {
+        solve_firstv2(n);
+      } else if (extra == "3") {
+        solve_firstv3(n);
+      } else {
+        solve_first(n);
+      }
     }
   }
 
