@@ -7,27 +7,20 @@
 CMake
 
 ```
-mkdir -p build && cmake -B build . && make -C build
+mkdir -p build && cd build && cmake .. && make . && cd ..
 ```
 
 Compile command
 
 ```
-c++ -std=c++17 -pthread src/nqueens.cc -o nqueens
+mkdir -p build
+c++ -std=c++17 -pthread src/nqueens.cc -o build/nqueens
 ```
 
 # Run
 
-CMake
-
 ```
 ./build/nqueens -problemType all -N 5
-```
-
-Compile
-
-```
-./nqueens -problemType all -N 5
 ```
 
 # Generate dot image
