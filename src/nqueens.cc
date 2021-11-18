@@ -1,5 +1,5 @@
-#include <fmt/core.h>
-#include <fmt/ranges.h>
+//#include <fmt/core.h>
+//#include <fmt/ranges.h>
 #include <algorithm>
 #include <array>
 #include <bitset>
@@ -179,7 +179,7 @@ struct FNqueens {
     }
     if (rowMask == done && !found) {
       ++ans;
-      fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
+      // fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
       found = true;
       genDot();
       return true;
@@ -206,7 +206,7 @@ struct FNqueens {
     }
     if (rowMask == done && !found && heavycheker(rowMask, ld, rd, done)) {
       ++ans;
-      fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
+      // fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
       found = true;
       genDot();
       return true;
@@ -246,7 +246,7 @@ struct FNqueens {
   void genDot() {
     lock_guard<mutex> lock(m_lock);
     auto dotFile = vector<vector<string>>(n);
-    fmt::print("{}\n", board);
+    // fmt::print("{}\n", board);
     fill(dotFile.begin(), dotFile.end(), vector<string>(n));
     for (auto i = 0u; i < n; i++) {
       fill(dotFile[i].begin(), dotFile[i].end(), "</td><td>    ");
@@ -356,7 +356,7 @@ struct NQueens {
 
   void genDot() {
     lock_guard<mutex> lock(m_lock);
-    fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
+    // fmt::print("{}\n", vector<int>(tracker.begin(), tracker.begin() + n));
     auto dotFile = std::vector<std::vector<string>>(n);
     std::fill(dotFile.begin(), dotFile.end(), vector<std::string>(n));
     for (auto i = 0u; i < n; i++) {
@@ -499,13 +499,7 @@ int main(int argc, char** argv) {
       }
     } else {
       dot.open("solution.dot");
-      if (extra == "2") {
-        solve_firstv2(n);
-      } else if (extra == "3") {
-        solve_firstv3(n);
-      } else {
-        solve_first(n);
-      }
+      solve_firstv3(n);
     }
   }
 

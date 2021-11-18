@@ -2,13 +2,35 @@
 
 > Ivan R. Buendia Gutierrez
 
+# Build
+
+CMake
+
 ```
 mkdir -p build && cmake -B build . && make -C build
 ```
 
+Compile command
+
+```
+c++ -std=c++17 -pthread src/nqueens.cc -o nqueens
+```
+
+# Run
+
+CMake
+
 ```
 ./build/nqueens -problemType all -N 5
 ```
+
+Compile
+
+```
+./nqueens -problemType all -N 5
+```
+
+# Generate dot image
 
 ```
 dot -Tpng solution.dot -o queens.png
