@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 file(GLOB_RECURSE SRC_FILES src/*.cc)
 
 add_executable(nqueens ${SRC_FILES})
+
 target_compile_options(nqueens PUBLIC)
 #target_compile_options(nqueens PUBLIC -O3 -march=native)
 
