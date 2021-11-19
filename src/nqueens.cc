@@ -239,7 +239,7 @@ struct FNqueens {
   }
 
   bool heavycheker(uint64_t rowMask, uint64_t ld, uint64_t rd, uint64_t done) {
-    set rows(board.begin(), board.end());
+    set<int> rows(board.begin(), board.end());
     return n == rows.size();
   }
 
